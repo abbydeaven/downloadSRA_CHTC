@@ -1,27 +1,58 @@
 #!/bin/bash
-
-#the SRR accession will be stored in variable $1, passed from GetFastqFiles.sh
-#cd into accession directory
-cd ../FastqFiles/${1}
-
-#this command extracts the url tag from the .json file, then extract the url, then passes that to xargs, which then passes each url to curl iteratively (-n 1)
-grep -Eo '"url": "[^"]*"' ./${1}.json | grep -o '"[^"]*"$' | xargs -n 1 curl  -sS -C - -O
-
-res=$?
-if test "$res" != "0"; then
-  echo "${1}, exit code ${res}: running grep/curl call again"
-  grep -Eo '"url": "[^"]*"' ./${1}.json | grep -o '"[^"]*"$' | xargs -n 1 curl  -sS -C - -O
-
-  res=$?
-  if test "$res" != "0"; then
-    echo "${1}, exit code ${res}: running grep/curl call again"
-    grep -Eo '"url": "[^"]*"' ./${1}.json | grep -o '"[^"]*"$' | xargs -n 1 curl  -sS -C - -O
-  fi
-
-
+# downloadFastq.sh  –  Download fastq.gz files using URLs from ffq JSON metadata
+# CHTC/HTCondor version; replaces curlFastq.sh (UGA)
+#
+# Variables injected by HTCondor via downloadFastq.sub:
+#   accession  – SRR accession number (e.g. SRR5177530)
+#   outdir     – path to FastqFiles directory on /staging
+ 
+set -euo pipefail
+ 
+echo "===== Downloading fastq for: ${accession} ====="
+echo "Host: $(hostname)"
+echo "Date: $(date)"
+ 
+json="${outdir}/${accession}/${accession}.json"
+ 
+# Confirm metadata file exists before proceeding
+if [[ ! -f "${json}" ]]; then
+    echo "ERROR: JSON metadata file not found at ${json}" >&2
+    echo "Run getMetadata.sub first." >&2
+    exit 1
 fi
-
-echo "${1}, exit code ${?}"
-#grep -Eo '"url": "[^"]*"' ./${1}.json | grep -o '"[^"]*"$' | xargs -n 1 curl  -sS -C - -O
-
-exit
+ 
+cd "${outdir}/${accession}"
+ 
+# Extract FTP urls from JSON and download each one
+# Retries up to 3 times on failure, resuming partial downloads with -C -
+urls=$(grep -Eo '"url": "[^"]*"' "${json}" | grep -o '"[^"]*"$' | tr -d '"')
+ 
+if [[ -z "$urls" ]]; then
+    echo "ERROR: No URLs found in ${json}" >&2
+    exit 1
+fi
+ 
+for url in $urls; do
+    echo "Downloading: ${url}"
+ 
+    # Attempt 1
+    curl -sS -C - -O "${url}" && continue
+ 
+    echo "Attempt 1 failed for ${url}, retrying..."
+ 
+    # Attempt 2
+    curl -sS -C - -O "${url}" && continue
+ 
+    echo "Attempt 2 failed for ${url}, retrying..."
+ 
+    # Attempt 3
+    curl -sS -C - -O "${url}"
+ 
+    if [[ $? -ne 0 ]]; then
+        echo "ERROR: All 3 download attempts failed for ${url}" >&2
+        exit 1
+    fi
+done
+ 
+echo "===== Finished: ${accession} ====="
+ 
