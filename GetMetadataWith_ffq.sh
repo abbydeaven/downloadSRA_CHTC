@@ -1,34 +1,18 @@
 #!/bin/bash
-#SBATCH --job-name=GetMetaDataWith_ffq.sh
-#SBATCH --partition=batch
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=24
-#SBATCH --mem=50gb
-#SBATCH --time=1:00:00
-#SBATCH --output=./fetchfastq.%j.out
-#SBATCH --error=./fetchfastq.%j.err
 
-cd $SLURM_SUBMIT_DIR
+set -euo pipefail
 
 ##This script takes an input of SRR accession #s one per line. For each accessiob. Edit last line to include path to your list of accessions.
 #Your accession file should include one accession per line with no other information.
 
-accession="/scratch/zlewis/2024_HDA1_MS/Revision_GeneExpression/accessions.txt"
+echo "===== Fetching metadata for: ${accession} ====="
+echo "Host: $(hostname)"
+echo "Date: $(date)"
 
-module load ffq/0.3.1-GCCcore-11.3.0
+mkdir -p ${outdir}
+mkdir -p ${outdir}/${accession}
 
-#make a directory to store fastq metadata [.JSON] format and files.
-mkdir ../FastqFiles
+# Fetch metadata as JSON via ffq (--ftp returns EBI FTP urls suitable for curl)
+ffq -o "${outdir}/${accession}/${accession}.json" --ftp "${accession}"
 
-#For each line of the accession file, make a directory and fetch fastq metadata using ffq
-
-while read -r line
-do
-#make a new directory for each accession
-  mkdir ../FastqFiles/${line}
-#download metadata and store in a .JSON file
-  ffq -o ../FastqFiles/${line}/${line}.json --ftp "$line"
-
-done <"${accession}"
+echo "===== Done: ${accession} ====="
