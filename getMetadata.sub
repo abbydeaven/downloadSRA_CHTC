@@ -1,0 +1,28 @@
+container_image = osdf:///chtc/staging/Env/ffq-env.def
+
+JOBNAME = 2022_AfumChromatin
+outdir = /home/deaven2/SRA_Meta/$JOBNAME
+
+### Define accession file
+accession_list = accessions.txt
+
+# Resource requests 
+request_cpus   = 1
+request_memory = 4GB
+request_disk   = 1GB
+
+# HTCondor job settings
+# ---------------------------------------------------------------------------
+# Tell CHTC that we are running a container image
+universe = container
+executable = GetMetadataWith_ffq.sh
+
+environment = "accession=$(accession) outdir=$(outdir)"
+
+log    = logs/metadata_$(accession).log
+output = logs/metadata_$(accession).out
+error  = logs/metadata_$(accession).err
+
+
+# Map each file in separate job
+queue accession from $(accession_list)
